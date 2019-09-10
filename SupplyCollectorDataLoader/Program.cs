@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using S2.BlackSwan.SupplyCollector;
 using S2.BlackSwan.SupplyCollector.Models;
 
 namespace SupplyCollectorDataLoader {
@@ -23,14 +24,38 @@ namespace SupplyCollectorDataLoader {
 
             Assembly supplyCollectorAssembly = Assembly.LoadFile(supplyCollectorPath);
             Type supplyCollectorType = supplyCollectorAssembly.GetType(String.Format("{0}.{0}", supplyCollectorName));
+            Type loaderType = supplyCollectorAssembly.GetType(String.Format("{0}.{0}Loader", supplyCollectorName));
 
-            SupplyCollectorDataLoaderBase loader = (SupplyCollectorDataLoaderBase)Activator.CreateInstance(supplyCollectorType);
+            SupplyCollectorDataLoaderBase loader = (SupplyCollectorDataLoaderBase)Activator.CreateInstance(loaderType);
+            ISupplyCollector supplyCollector = (ISupplyCollector)Activator.CreateInstance(supplyCollectorType);
 
-            var dataContainer = new DataContainer() {ConnectionString = connectString};
-            var dataCollection = new DataCollection(dataContainer, dataCollectionName);
-            var dataEntity = new DataEntity(dataEntityName, DataType.String, "String", dataContainer, dataCollection);
+            try {
+                var dataContainer = new DataContainer() { ConnectionString = connectString };
 
-            loader.LoadSamples(dataEntity, samplesCount);
+                var (collections, entities) = supplyCollector.GetSchema(dataContainer);
+                var dataCollection = collections.Find(x => x.Name.Equals(dataCollectionName));
+                DataEntity dataEntity;
+
+                if (dataCollection == null) {
+                    dataCollection = new DataCollection(dataContainer, dataCollectionName);
+
+                    dataEntity = new DataEntity(dataEntityName, DataType.String, "String", dataContainer,
+                        dataCollection);
+                }
+                else {
+                    dataEntity = entities.Find(x =>
+                        x.Collection.Name.Equals(dataCollectionName) && x.Name.Equals(dataEntityName));
+
+                    if (dataEntity == null) {
+                        throw new ApplicationException($"Collection {dataCollectionName} exists, but data entity {dataEntityName} is missing! Cannot proceed.");
+                    }
+                }
+
+                loader.LoadSamples(dataEntity, samplesCount);
+            }
+            catch (Exception ex) {
+                Console.WriteLine($"Error loading data: {ex}");
+            }
         }
     }
 }
