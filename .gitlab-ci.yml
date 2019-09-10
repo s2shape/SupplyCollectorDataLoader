@@ -17,5 +17,5 @@ publish:
   script:
     - dotnet build
     - dotnet publish
-    - nuget push SupplyCollectorDataLoader/bin/Debug/*.nupkg $NUGET_KEY -Source https://www.myget.org/F/s2/api/v2/package
+    - dotnet nuget push SupplyCollectorDataLoader/bin/Debug/*.nupkg -k $NUGET_KEY -s https://www.myget.org/F/s2/api/v2/package
 
