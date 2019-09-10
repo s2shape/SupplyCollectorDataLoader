@@ -7,7 +7,7 @@ using S2.BlackSwan.SupplyCollector;
 using S2.BlackSwan.SupplyCollector.Models;
 
 namespace SupplyCollectorDataLoader {
-    class Program {
+    public class Program {
         static void Main(string[] args) {
             if (args.Length == 0 || args.Length != 5 || "--help".Equals(args[0]) || "/?".Equals(args[0])) {
                 Console.WriteLine("Usage: DataLoader <CollectorName> <ConnectionString> <DataCollection> <DataEntity> <SamplesCount>");
