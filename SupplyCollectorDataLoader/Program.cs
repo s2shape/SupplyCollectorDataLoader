@@ -12,20 +12,18 @@ namespace SupplyCollectorDataLoader {
     public class Program {
         private static bool _debug = false;
 
-        static void Main(string[] args) {
-            if (args.Length == 0 || args.Length != 5 || "--help".Equals(args[0]) || "/?".Equals(args[0])) {
-                Console.WriteLine("Usage: DataLoader <CollectorName> <ConnectionString> <DataCollection> <DataEntity> <SamplesCount>");
-                return;
-            }
+        static void PrintUsage() {
+            Console.WriteLine("Usage: * DataLoader -init <CollectorName> <ConnectionString>");
+            Console.WriteLine("       * DataLoader -xunit <CollectorName> <ConnectionString>");
+            Console.WriteLine("       * DataLoader -samples <CollectorName> <ConnectionString> <DataCollection> <DataEntity,DataEntity:type,...> <SamplesCount>");
+            Console.WriteLine("  Data types: string,int,bool,double,date. Default is string");
 
-            var supplyCollectorName = args[0];
-            var connectString = args[1];
-            var dataCollectionName = args[2];
-            var dataEntityName = args[3];
-            var samplesCount = Int64.Parse(args[4]);
+            Environment.Exit(1);
+        }
 
+        private static (SupplyCollectorDataLoaderBase, ISupplyCollector) LoadSupplyCollector(string supplyCollectorName) {
             string supplyCollectorPath = Path.Combine(Environment.CurrentDirectory, supplyCollectorName + ".dll");
-            if(_debug)
+            if (_debug)
                 Console.WriteLine($"[DEBUG] Loading supply collector from {supplyCollectorPath}");
 
             AssemblyLoadContext.Default.Resolving += Assembly_Resolving;
@@ -36,32 +34,138 @@ namespace SupplyCollectorDataLoader {
             SupplyCollectorDataLoaderBase loader = (SupplyCollectorDataLoaderBase)Activator.CreateInstance(loaderType);
             ISupplyCollector supplyCollector = (ISupplyCollector)Activator.CreateInstance(supplyCollectorType);
 
-            try {
-                var dataContainer = new DataContainer() { ConnectionString = connectString };
+            return (loader, supplyCollector);
+        }
 
-                var (collections, entities) = supplyCollector.GetSchema(dataContainer);
-                var dataCollection = collections.Find(x => x.Name.Equals(dataCollectionName));
-                DataEntity dataEntity;
+        private static DataType ConvertDataType(string dataType) {
+            if ("string".Equals(dataType, StringComparison.InvariantCultureIgnoreCase)) {
+                return DataType.String;
+            } else if ("int".Equals(dataType, StringComparison.InvariantCultureIgnoreCase)) {
+                return DataType.Int;
+            } else if ("bool".Equals(dataType, StringComparison.InvariantCultureIgnoreCase)) {
+                return DataType.Boolean;
+            } else if ("double".Equals(dataType, StringComparison.InvariantCultureIgnoreCase)) {
+                return DataType.Double;
+            } else if ("date".Equals(dataType, StringComparison.InvariantCultureIgnoreCase)) {
+                return DataType.DateTime;
+            }
 
-                if (dataCollection == null) {
-                    dataCollection = new DataCollection(dataContainer, dataCollectionName);
+            return DataType.Unknown;
+        }
 
-                    dataEntity = new DataEntity(dataEntityName, DataType.String, "String", dataContainer,
-                        dataCollection);
+        static void Main(string[] args) {
+            if (args.Length == 0 || "--help".Equals(args[0]) || "/?".Equals(args[0])) {
+                PrintUsage();
+                return;
+            }
+
+            var mode = args[0].Trim();
+            if ("-init".Equals(mode, StringComparison.InvariantCultureIgnoreCase)) {
+                if (args.Length < 3) {
+                    PrintUsage();
+                    return;
                 }
-                else {
-                    dataEntity = entities.Find(x =>
-                        x.Collection.Name.Equals(dataCollectionName) && x.Name.Equals(dataEntityName));
 
-                    if (dataEntity == null) {
-                        throw new ApplicationException($"Collection {dataCollectionName} exists, but data entity {dataEntityName} is missing! Cannot proceed.");
+                var supplyCollectorName = args[1].Trim();
+                var connectString = args[2].Trim();
+
+                var (loader, _) = LoadSupplyCollector(supplyCollectorName);
+
+                try {
+                    Console.WriteLine("Initializing data container...");
+                    loader.InitializeDatabase(new DataContainer() {ConnectionString = connectString});
+                    Console.WriteLine("Success.");
+                }
+                catch (Exception ex) {
+                    Console.WriteLine($"Error: {ex}");
+                }
+            } else if ("-xunit".Equals(mode, StringComparison.InvariantCultureIgnoreCase)) {
+                if (args.Length < 3)
+                {
+                    PrintUsage();
+                    return;
+                }
+
+                var supplyCollectorName = args[1].Trim();
+                var connectString = args[2].Trim();
+
+                var (loader, _) = LoadSupplyCollector(supplyCollectorName);
+
+                try {
+                    Console.WriteLine("Loading unit test data...");
+                    loader.LoadUnitTestData(new DataContainer() {ConnectionString = connectString});
+                    Console.WriteLine("Success.");
+                }
+                catch (Exception ex) {
+                    Console.WriteLine($"Error: {ex}");
+                }
+            } else if ("-samples".Equals(mode, StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (args.Length < 6)
+                {
+                    PrintUsage();
+                    return;
+                }
+
+                var supplyCollectorName = args[1].Trim();
+
+                var (loader, collector) = LoadSupplyCollector(supplyCollectorName);
+
+                var connectString = args[2].Trim();
+                var dataCollectionName = args[3];
+                var dataEntityNamesArg = args[4];
+                var samplesCount = Int64.Parse(args[5]);
+
+                var dataEntityNames = dataEntityNamesArg.Split(",", StringSplitOptions.RemoveEmptyEntries);
+                var dataEntityTypes = new string[dataEntityNames.Length];
+
+                for (int i = 0; i < dataEntityNames.Length; i++) {
+                    if (dataEntityNames[i].Contains(":")) {
+                        var entityNameParts = dataEntityNames[i].Split(":");
+
+                        dataEntityNames[i] = entityNameParts[0];
+                        dataEntityTypes[i] = entityNameParts[1];
+                    }
+                    else {
+                        dataEntityTypes[i] = "string";
                     }
                 }
 
-                loader.LoadSamples(dataEntity, samplesCount);
-            }
-            catch (Exception ex) {
-                Console.WriteLine($"Error loading data: {ex}");
+                try
+                {
+                    Console.WriteLine("Loading samples data...");
+                    var dataContainer = new DataContainer() { ConnectionString = connectString };
+
+                    var (collections, entities) = collector.GetSchema(dataContainer);
+                    var dataCollection = collections.Find(x => x.Name.Equals(dataCollectionName));
+                    DataEntity[] dataEntities = new DataEntity[dataEntityNames.Length];
+
+                    if (dataCollection == null) {
+                        dataCollection = new DataCollection(dataContainer, dataCollectionName);
+                    }
+                    else {
+                        foreach (var dataEntityName in dataEntityNames) {
+                            if(!entities.Any(x => x.Collection.Name.Equals(dataCollectionName) && x.Name.Equals(dataEntityName)))
+                                throw new ApplicationException($"Collection {dataCollectionName} exists, but data entity {dataEntityName} is missing! Cannot proceed.");
+                        }
+                    }
+
+                    for (int i = 0; i < dataEntityNames.Length; i++) {
+                        dataEntities[i] = entities.Find(x =>
+                            x.Collection.Name.Equals(dataCollectionName) && x.Name.Equals(dataEntityNames[i]));
+
+                        if (dataEntities[i] == null) {
+                            dataEntities[i] = new DataEntity(dataEntityNames[i], ConvertDataType(dataEntityTypes[i]), dataEntityTypes[i], dataContainer,
+                                dataCollection);
+                        }
+                    }
+
+                    loader.LoadSamples(dataEntities, samplesCount);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex}");
+                }
             }
         }
 
