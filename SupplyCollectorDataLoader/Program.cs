@@ -61,6 +61,7 @@ namespace SupplyCollectorDataLoader {
         }
 
         static void Main(string[] args) {
+            Console.WriteLine("SupplyCollectorDataLoader v." + typeof(Program).Assembly.GetName().Version);
             if (args.Length == 0 || "--help".Equals(args[0]) || "/?".Equals(args[0])) {
                 PrintUsage();
                 return;
