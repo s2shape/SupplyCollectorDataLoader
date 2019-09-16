@@ -12,7 +12,7 @@
     <Version>1.0.5</Version>
     <ApplicationIcon />
     <OutputType>Exe</OutputType>
-    <StartupObject />
+    <StartupObject>SupplyCollectorDataLoader.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
