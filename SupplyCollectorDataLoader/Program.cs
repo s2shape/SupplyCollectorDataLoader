@@ -23,13 +23,20 @@ namespace SupplyCollectorDataLoader {
 
         private static (SupplyCollectorDataLoaderBase, ISupplyCollector) LoadSupplyCollector(string supplyCollectorName) {
             string supplyCollectorPath = Path.Combine(Environment.CurrentDirectory, supplyCollectorName + ".dll");
-            if (_debug)
-                Console.WriteLine($"[DEBUG] Loading supply collector from {supplyCollectorPath}");
+            string supplyCollectorLoaderPath = Path.Combine(Environment.CurrentDirectory, supplyCollectorName + "Loader.dll");
 
             AssemblyLoadContext.Default.Resolving += Assembly_Resolving;
+
+            if (_debug)
+                Console.WriteLine($"[DEBUG] Loading supply collector from {supplyCollectorPath}");
             Assembly supplyCollectorAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(supplyCollectorPath);
+
+            if (_debug)
+                Console.WriteLine($"[DEBUG] Loading supply collector loader from {supplyCollectorLoaderPath}");
+            Assembly supplyCollectorLoaderAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(supplyCollectorLoaderPath);
+
             Type supplyCollectorType = supplyCollectorAssembly.GetType(String.Format("{0}.{0}", supplyCollectorName));
-            Type loaderType = supplyCollectorAssembly.GetType(String.Format("{0}.{0}Loader", supplyCollectorName));
+            Type loaderType = supplyCollectorLoaderAssembly.GetType(String.Format("{0}.{0}Loader", supplyCollectorName));
 
             SupplyCollectorDataLoaderBase loader = (SupplyCollectorDataLoaderBase)Activator.CreateInstance(loaderType);
             ISupplyCollector supplyCollector = (ISupplyCollector)Activator.CreateInstance(supplyCollectorType);
