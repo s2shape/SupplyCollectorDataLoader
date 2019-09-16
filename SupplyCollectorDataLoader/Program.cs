@@ -36,10 +36,10 @@ namespace SupplyCollectorDataLoader {
             Assembly supplyCollectorLoaderAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(supplyCollectorLoaderPath);
 
             Type supplyCollectorType = supplyCollectorAssembly.GetType(String.Format("{0}.{0}", supplyCollectorName));
-            Type loaderType = supplyCollectorLoaderAssembly.GetType(String.Format("{0}.{0}Loader", supplyCollectorName));
+            Type loaderType = supplyCollectorLoaderAssembly.GetType(String.Format("{0}Loader.{0}Loader", supplyCollectorName));
 
-            SupplyCollectorDataLoaderBase loader = (SupplyCollectorDataLoaderBase)Activator.CreateInstance(loaderType);
             ISupplyCollector supplyCollector = (ISupplyCollector)Activator.CreateInstance(supplyCollectorType);
+            SupplyCollectorDataLoaderBase loader = (SupplyCollectorDataLoaderBase)Activator.CreateInstance(loaderType);
 
             return (loader, supplyCollector);
         }
