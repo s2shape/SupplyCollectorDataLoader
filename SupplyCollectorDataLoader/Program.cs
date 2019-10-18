@@ -11,6 +11,7 @@ using S2.BlackSwan.SupplyCollector.Models;
 namespace SupplyCollectorDataLoader {
     public class Program {
         private static bool _debug = false;
+        private static Dictionary<string, Assembly> _loadedAssemblies = new Dictionary<string, Assembly>();
 
         static void PrintUsage() {
             Console.WriteLine("Usage: * DataLoader -init <CollectorName> <ConnectionString>");
@@ -86,6 +87,7 @@ namespace SupplyCollectorDataLoader {
                 }
                 catch (Exception ex) {
                     Console.WriteLine($"Error: {ex}");
+                    Environment.Exit(2);
                 }
             } else if ("-xunit".Equals(mode, StringComparison.InvariantCultureIgnoreCase)) {
                 if (args.Length < 3)
@@ -106,6 +108,7 @@ namespace SupplyCollectorDataLoader {
                 }
                 catch (Exception ex) {
                     Console.WriteLine($"Error: {ex}");
+                    Environment.Exit(2);
                 }
             } else if ("-samples".Equals(mode, StringComparison.InvariantCultureIgnoreCase))
             {
@@ -173,28 +176,40 @@ namespace SupplyCollectorDataLoader {
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error: {ex}");
+                    Environment.Exit(2);
                 }
             }
         }
 
-        private static Assembly Assembly_Resolving(AssemblyLoadContext context, AssemblyName name)
-        {
+        private static Assembly Assembly_Resolving(AssemblyLoadContext context, AssemblyName name) {
             if (_debug)
                 Console.WriteLine($"[DEBUG] Resolving {name.FullName}");
 
-            var foundDlls = Directory.GetFileSystemEntries(new FileInfo(Environment.CurrentDirectory).FullName, name.Name + ".dll", SearchOption.AllDirectories);
-            if (foundDlls.Any())
-            {
+            if (_loadedAssemblies.ContainsKey(name.Name)) {
+                return _loadedAssemblies[name.Name];
+            }
+
+            Assembly a = null;
+
+            var foundDlls = Directory.GetFileSystemEntries(new FileInfo(Environment.CurrentDirectory).FullName,
+                name.Name + ".dll", SearchOption.AllDirectories);
+            if (foundDlls.Any()) {
                 if (_debug) {
                     foreach (var foundDll in foundDlls) {
                         Console.WriteLine($"  resolved to {foundDll}");
                     }
                 }
 
-                return context.LoadFromAssemblyPath(foundDlls[0]);
+                a = context.LoadFromAssemblyPath(foundDlls[0]);
+            }
+            else {
+                throw new AssemblyMissingException($"Assembly {name} is missing!");
             }
 
-            return context.LoadFromAssemblyName(name);
+            if(a != null)
+                _loadedAssemblies.Add(name.Name, a);
+
+            return a;
         }
     }
 }
